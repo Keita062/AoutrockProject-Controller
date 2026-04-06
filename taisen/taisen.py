@@ -374,8 +374,8 @@ class FeatureExtractor:
             features.extend([0, 0, 0, 0, 0])
 
         # 2. ボタン頻度と連続性（各ボタンの合計＋連続押下パターン）
-        # SELECT を除外（ゲーム中に不使用）
-        button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT"] and c in window.columns]
+        # SELECT, START を除外（ゲーム中に不使用）
+        button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT", "START"] and c in window.columns]
         for col in button_cols:
             count = window[col].sum()
             features.append(count)
@@ -417,8 +417,8 @@ class FeatureExtractor:
 
         # 4. アイドル時間（何もボタンを押さない期間の統計）
         # idle_max は定常的なため削除。idle_mean のみ使用
-        # SELECT を除外（ゲーム中に不使用）
-        all_button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT"] and c in window.columns]
+        # SELECT, START を除外（ゲーム中に不使用）
+        all_button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT", "START"] and c in window.columns]
         any_button = window[all_button_cols].sum(axis=1) > 0
         idle_periods = []
         idle_count = 0
@@ -450,8 +450,8 @@ class FeatureExtractor:
             "delta_t_mean", "delta_t_std", "delta_t_max", "delta_t_q25", "delta_t_q75",
         ]
 
-        # 除外するボタン：SELECT（ゲーム中に不使用）
-        button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT"]]
+        # 除外するボタン：SELECT, START（ゲーム中に不使用）
+        button_cols = [c for c in BUTTON_COLUMNS if c not in ["StateX", "StateY", "SELECT", "START"]]
         for col in button_cols:
             names.append(f"{col}_count")
             names.append(f"{col}_run_length_avg")
