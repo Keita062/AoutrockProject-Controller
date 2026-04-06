@@ -467,6 +467,10 @@ class FeatureExtractor:
             rapid_ratio,                   # rapid_input_ratio
         ])
 
+        # 9. 攻撃・防御パターンの分析（相手データなしで自分のパターンを検出）
+        response_features = self._detect_attack_defense_patterns(window)
+        features.extend(response_features)
+
         # facing_direction は削除（ビデオマッピング失敗ファイルが多い）
 
         return np.array(features)
@@ -495,6 +499,9 @@ class FeatureExtractor:
             "has_simultaneous_press", "simultaneous_press_count", "max_simultaneous_buttons", "simultaneous_press_ratio",
             # 連打検出
             "has_rapid_input", "rapid_input_count", "max_rapid_length", "rapid_input_ratio",
+            # 相手の入力への応答パターン
+            "response_to_opponent_attack", "attack_after_opponent_defense", "mutual_attack_count",
+            "defensive_ratio", "aggressive_ratio",
         ])
 
         return names
@@ -584,6 +591,65 @@ class FeatureExtractor:
         ratio = total_rapid_frames / len(window) if len(window) > 0 else 0.0
 
         return total_rapid_frames, max_rapid_len, ratio
+
+    def _detect_attack_defense_patterns(self, window: pd.DataFrame) -> List[float]:
+        """
+        攻撃と防御のパターンを分析（相手データなしで自分の行動パターンを検出）。
+
+        攻撃：A, B, X, Y ボタン
+        防御：左矢印（後ろ移動）
+
+        Returns:
+            [response_to_attack, attack_after_defense, mutual_attack, defense_ratio, aggression_ratio]
+        """
+        attack_buttons = ["A", "B", "X", "Y"]
+        defense_button = "LeftArrow"
+
+        # 自分の攻撃と防御を定義
+        available_attack = [c for c in attack_buttons if c in window.columns]
+        if not available_attack:
+            return [0.0, 0.0, 0.0, 0.0, 0.0]
+
+        self_attack = window[available_attack].sum(axis=1) > 0
+        self_defense = window[defense_button].values.astype(bool) if defense_button in window.columns else np.zeros(len(window), dtype=bool)
+
+        # パターン1: 防御 → 攻撃（カウンター）
+        counter_attack = 0
+        for i in range(len(window) - 1):
+            if self_defense[i] and self_attack.iloc[i + 1]:
+                counter_attack += 1
+
+        # パターン2: 攻撃 → 防御（安全な攻撃）
+        safe_attack = 0
+        for i in range(len(window) - 1):
+            if self_attack.iloc[i] and self_defense[i + 1]:
+                safe_attack += 1
+
+        # パターン3: 連続攻撃（積極的）
+        continuous_attack = 0
+        attack_count = 0
+        for i in range(len(window) - 1):
+            if self_attack.iloc[i]:
+                attack_count += 1
+                if self_attack.iloc[i + 1]:  # 次のフレームも攻撃
+                    continuous_attack += 1
+            else:
+                attack_count = 0
+
+        # 割合を計算
+        total_defense = self_defense.sum()
+        total_attack = self_attack.sum()
+
+        defense_ratio = counter_attack / total_defense if total_defense > 0 else 0.0
+        aggression_ratio = continuous_attack / total_attack if total_attack > 0 else 0.0
+
+        return [
+            float(safe_attack),        # response_to_attack（防御後の攻撃）
+            float(counter_attack),     # attack_after_opponent_defense（防御から攻撃への切り替え）
+            float(continuous_attack),  # mutual_attack_count（連続攻撃）
+            float(defense_ratio),      # defensive_ratio
+            float(aggression_ratio),   # aggressive_ratio
+        ]
 
 
 # ============================================================
