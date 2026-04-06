@@ -779,20 +779,28 @@ class PlayerIdentifier:
         if train_file_indices is None or test_file_indices is None:
             if auto_pair_split:
                 # 対戦ペア単位での自動分割（成功ファイルのみを使用）
-                # pair_info をフィルタリング：成功ファイルのみに含まれるペアを使用
-                filtered_pair_info = {}
-                for pair, file_indices in self.loader.pair_info.items():
-                    # そのペアのすべてのファイルが成功しているかチェック
-                    if all(idx in successful_file_indices for idx in file_indices):
-                        filtered_pair_info[pair] = file_indices
+                # 成功ファイルのみからペア情報を再構築
+                successful_list = sorted(successful_file_indices)
 
-                if filtered_pair_info:
-                    print(f"\nFiltered pair info: {len(filtered_pair_info)} pairs with all successful files")
-                    train_file_indices, test_file_indices = self._get_pair_based_split(pair_info=filtered_pair_info)
+                # 成功ファイルのみでペア情報を再構築
+                from collections import defaultdict
+                rebuilt_pair_info = defaultdict(list)
+                for orig_idx in successful_list:
+                    info = self.loader.file_info[orig_idx]
+                    player1 = info["player1"]
+                    player2 = info["player2"]
+                    pair_key = tuple(sorted([player1, player2]))
+                    rebuilt_pair_info[pair_key].append(orig_idx)
+
+                if rebuilt_pair_info:
+                    print(f"\nRebuilt pair info from successful files: {len(rebuilt_pair_info)} pairs")
+                    for pair, indices in sorted(rebuilt_pair_info.items()):
+                        print(f"  {pair[0]} vs {pair[1]}: {len(indices)} files (indices: {indices})")
+
+                    train_file_indices, test_file_indices = self._get_pair_based_split(pair_info=dict(rebuilt_pair_info))
                 else:
-                    print(f"Warning: No pairs with all successful files. Using default split.")
+                    print(f"Warning: No pairs found in successful files. Using default split.")
                     # フォールバック
-                    successful_list = sorted(successful_file_indices)
                     split_point = max(1, len(successful_list) * 7 // 10)
                     train_file_indices = successful_list[:split_point]
                     test_file_indices = successful_list[split_point:]
