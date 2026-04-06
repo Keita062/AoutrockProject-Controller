@@ -440,6 +440,33 @@ class FeatureExtractor:
         else:
             features.append(0)
 
+        # 6. 昇竜拳・波動拳パターン検出
+        shoryuken_count, hadoken_count = self._detect_command_patterns(window)
+        features.extend([
+            shoryuken_count,
+            hadoken_count,
+            1 if shoryuken_count > 0 else 0,  # has_shoryuken
+            1 if hadoken_count > 0 else 0,    # has_hadoken
+        ])
+
+        # 7. 同時押し検出
+        simul_press, max_simul, simul_ratio = self._detect_simultaneous_press(window)
+        features.extend([
+            1 if simul_press > 0 else 0,  # has_simultaneous_press
+            simul_press,                   # simultaneous_press_count
+            max_simul,                     # max_simultaneous_buttons
+            simul_ratio,                   # simultaneous_press_ratio
+        ])
+
+        # 8. 連打検出
+        rapid_count, max_rapid_len, rapid_ratio = self._detect_rapid_input(window)
+        features.extend([
+            1 if rapid_count > 0 else 0,  # has_rapid_input
+            rapid_count,                   # rapid_input_count
+            max_rapid_len,                 # max_rapid_length
+            rapid_ratio,                   # rapid_input_ratio
+        ])
+
         # facing_direction は削除（ビデオマッピング失敗ファイルが多い）
 
         return np.array(features)
@@ -462,9 +489,101 @@ class FeatureExtractor:
             "stick_distance_mean", "stick_distance_std",
             "idle_mean",  # idle_max を削除（定常的な特徴量）
             "time_since_event",
+            # コマンド検出特徴量
+            "shoryuken_count", "hadoken_count", "has_shoryuken", "has_hadoken",
+            # 同時押し検出
+            "has_simultaneous_press", "simultaneous_press_count", "max_simultaneous_buttons", "simultaneous_press_ratio",
+            # 連打検出
+            "has_rapid_input", "rapid_input_count", "max_rapid_length", "rapid_input_ratio",
         ])
 
         return names
+
+    def _detect_command_patterns(self, window: pd.DataFrame) -> Tuple[int, int]:
+        """
+        昇竜拳（↓→+ボタン）と波動拳（→↓→+ボタン）のパターンを検出。
+
+        Returns:
+            (shoryuken_count, hadoken_count)
+        """
+        shoryuken_count = 0
+        hadoken_count = 0
+
+        if "DownArrow" not in window.columns or "RightArrow" not in window.columns:
+            return 0, 0
+
+        down_seq = window["DownArrow"].values
+        right_seq = window["RightArrow"].values
+        button_seq = window[["A", "B", "X", "Y"]].sum(axis=1).values
+
+        # 昇竜拳パターン: ↓→ + ボタン
+        for i in range(len(window) - 2):
+            if down_seq[i] and right_seq[i + 1] and button_seq[i + 2]:
+                shoryuken_count += 1
+
+        # 波動拳パターン: →↓→ + ボタン
+        for i in range(len(window) - 3):
+            if right_seq[i] and down_seq[i + 1] and right_seq[i + 2] and button_seq[i + 3]:
+                hadoken_count += 1
+
+        return shoryuken_count, hadoken_count
+
+    def _detect_simultaneous_press(self, window: pd.DataFrame) -> Tuple[int, int, float]:
+        """
+        複数ボタンの同時押しを検出。
+
+        Returns:
+            (simultaneous_press_count, max_simultaneous_buttons, simultaneous_press_ratio)
+        """
+        button_cols = ["X", "Y", "B", "A", "RB", "LB", "RT", "LT"]
+        available_cols = [c for c in button_cols if c in window.columns]
+
+        if not available_cols:
+            return 0, 0, 0.0
+
+        button_count_per_frame = window[available_cols].sum(axis=1)
+        simul_frames = (button_count_per_frame >= 2).sum()
+        max_simul = int(button_count_per_frame.max())
+        ratio = simul_frames / len(window) if len(window) > 0 else 0.0
+
+        return simul_frames, max_simul, ratio
+
+    def _detect_rapid_input(self, window: pd.DataFrame) -> Tuple[int, int, float]:
+        """
+        同じボタンが3フレーム以上連続して押される連打を検出。
+
+        Returns:
+            (rapid_input_count, max_rapid_length, rapid_input_ratio)
+        """
+        button_cols = ["X", "Y", "B", "A", "RB", "LB", "RT", "LT"]
+        available_cols = [c for c in button_cols if c in window.columns]
+
+        if not available_cols:
+            return 0, 0, 0.0
+
+        total_rapid_frames = 0
+        max_rapid_len = 0
+
+        for col in available_cols:
+            press_seq = window[col].values
+            current_len = 0
+
+            for press in press_seq:
+                if press:
+                    current_len += 1
+                    if current_len >= 3:
+                        total_rapid_frames += 1
+                else:
+                    if current_len >= 3:
+                        max_rapid_len = max(max_rapid_len, current_len)
+                    current_len = 0
+
+            if current_len >= 3:
+                max_rapid_len = max(max_rapid_len, current_len)
+
+        ratio = total_rapid_frames / len(window) if len(window) > 0 else 0.0
+
+        return total_rapid_frames, max_rapid_len, ratio
 
 
 # ============================================================
