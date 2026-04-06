@@ -1,0 +1,11 @@
+feature,diff_from_others
+simultaneous_press_count,0.6797088866069014
+simultaneous_press_ratio,0.6797088866068381
+rapid_input_count,0.6557943114772755
+rapid_input_ratio,0.6557943114772001
+max_simultaneous_buttons,0.634358396217994
+has_simultaneous_press,0.6010658088476364
+aggressive_ratio,0.5813072803899902
+mutual_attack_count,0.5730831847096605
+RT_count,0.5701696094443974
+A_run_length_avg,0.55100285503903

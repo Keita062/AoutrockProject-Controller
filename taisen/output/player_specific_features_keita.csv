@@ -1,0 +1,11 @@
+feature,diff_from_others
+stick_distance_mean,1.7701436403186417
+stick_distance_std,1.524304968132777
+delta_t_q75,0.8420662870266586
+delta_t_q25,0.7323057076782086
+DownLeft_count,0.5497643138124524
+Down_count,0.49480891691388107
+RB_count,0.33008546002756367
+DownLeft_run_length_avg,0.32715259426416887
+DownRight_count,0.31708784630658254
+Down_run_length_avg,0.2742190053438722
